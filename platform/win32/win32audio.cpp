@@ -669,8 +669,51 @@ void midi_queue_buffer(int numSamples, uint16_t* data)
 {
 }
 
-void midi_start_source()
+// < [dsl] These were not present if we didn't have OpenAL
+void midi_set_music_samplerate(void* opaquesource, uint32_t samplerate)
 {
+}
+
+bool midi_queue_slots_available(void* opaquesource)
+{
+	return false;
+}
+
+void midi_dequeue_midi_buffers(void* opaquesource)
+{
+}
+
+void midi_queue_buffer(void* opaquesource, int numTicks, uint16_t *data)
+{
+}
+
+void midi_stop_source(void* opaquesource)
+{
+}
+
+void midi_check_status(void* opaquesource)
+{
+}
+
+bool midi_check_finished(void* opaquesource)
+{
+	return true;
+}
+
+void plat_close_midi()
+{
+}
+// >
+
+// < [dsl] These were not present if we didn't have SDL
+void plat_update_window()
+{
+}
+// >
+
+void* midi_start_source()
+{
+	return nullptr;
 }
 
 void midi_stop_source()
