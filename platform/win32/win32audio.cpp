@@ -669,7 +669,7 @@ void midi_queue_buffer(int numSamples, uint16_t* data)
 {
 }
 
-// < [dsl] These were not present if we didn't have OpenAL
+// < [crispy.descent] These were not present if we didn't have OpenAL
 void midi_set_music_samplerate(void* opaquesource, uint32_t samplerate)
 {
 }
@@ -705,7 +705,7 @@ void plat_close_midi()
 }
 // >
 
-// < [dsl] These were not present if we didn't have SDL
+// < [crispy.descent] These were not present if we didn't have SDL
 void plat_update_window()
 {
 }

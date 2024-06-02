@@ -90,3 +90,38 @@ void plat_do_events();
 
 //Put the mouse in relative mode
 void plat_set_mouse_relative_mode(int state);
+
+//-----------------------------------------------------------------------------
+// < [crispy.descent] 3D rendering
+//-----------------------------------------------------------------------------
+
+struct vec2f_t
+{
+    float x, y;
+};
+
+struct vec3f_t
+{
+    float x, y, z;
+};
+
+struct vec4f_t
+{
+    float x, y, z;
+};
+
+struct crispy_vertex_t
+{
+    vec3f_t position;
+    vec3f_t normal;
+    vec2f_t uvs;
+    uint32_t color;
+};
+
+uintptr_t plat_create_texture(uint8_t* data, int width, int height);
+
+void plat_set_3d_view(vec3f_t eye, vec3f_t forward, vec3f_t up, float fov_rad, float ratio); 
+
+void plat_draw_3d(uintptr_t texture_id, crispy_vertex_t* vertices, int count);
+
+// > [crispy.descent] 

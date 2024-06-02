@@ -97,6 +97,32 @@ namespace
 			KeyReleased(scancode);
 			return 0;
 		}
+		// < [crispy] Support ALTED for quick-save and quick-load
+		else if (message == WM_SYSKEYDOWN)
+		{
+			int scancode = (lparam >> 16) & 0xff;
+			if (lparam & 0x1000000) //handle extended flag
+				scancode |= 0x80;
+			if (scancode != KEY_LALT)
+			{
+				KeyPressed(KEY_LALT);
+				KeyPressed(scancode);
+			}
+			return 0;
+		}
+		else if (message == WM_SYSKEYUP)
+		{
+			int scancode = (lparam >> 16) & 0xff;
+			if (lparam & 0x1000000) //handle extended flag
+				scancode |= 0x80;
+			if (scancode != KEY_LALT)
+			{
+				KeyReleased(scancode);
+				KeyReleased(KEY_LALT);
+			}
+			return 0;
+		}
+		// > [crispy]
 		else if (message == WM_INPUT)
 		{
 			HRAWINPUT rawinputHandle = (HRAWINPUT)lparam;
@@ -715,5 +741,22 @@ void mouse_set_pos(int x, int y)
 {
 	SetCursorPos(x, y);
 }
+
+// < [crispy] 3D rendering
+
+uintptr_t plat_create_texture(uint8_t* data, int width, int height)
+{
+	return 0;
+}
+
+void plat_set_3d_view(vec3f_t eye, vec3f_t forward, vec3f_t up, float fov_rad, float ratio)
+{
+}
+
+void plat_draw_3d(uintptr_t texture_id, crispy_vertex_t* vertices, int count)
+{
+}
+
+// > [crispy] 
 
 #endif
