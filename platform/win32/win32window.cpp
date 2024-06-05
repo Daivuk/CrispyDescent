@@ -13,6 +13,7 @@
 #include "win32joystick.h"
 #include <string>
 #include <vector>
+#include <cmath>
 
 #include <Windows.h>
 #include <windowsx.h>
@@ -27,6 +28,19 @@
 #define MAKEARGB(a,r,g,b) ((static_cast<uint32_t>(a) << 24) | (static_cast<uint32_t>(r) << 16) | (static_cast<uint32_t>(g) << 8) | static_cast<uint32_t>(b))
 
 // Display API:
+
+// < [crispy] draw list
+static std::vector<crispy_vertex_t> crispy_vertices;
+struct crispy_draw_cmd_t
+{
+	IDirect3DTexture9* texture;
+	int vertices_idx;
+	int count;
+};
+static std::vector<crispy_draw_cmd_t> crispy_draw_list;
+static D3DMATRIX crispy_view_matrix;
+static D3DMATRIX crispy_proj_matrix;
+// > [crispy]
 
 namespace
 {
@@ -384,6 +398,76 @@ namespace
 			dstrect.bottom = y + height;
 			device->StretchRect(surface, &srcrect, backbuffer, &dstrect, linearfilter ? D3DTEXF_LINEAR : D3DTEXF_POINT);
 
+			// < [crispy] Draw draw commands
+			// < TEMP CUBE
+			crispy_vertex_t cube_verts[36] = {
+				// Top
+				{{-1, 1, 1}, 0xFFFFFFFF, {0, 0}},
+				{{-1, -1, 1}, 0xFFFFFFFF, {0, 1}},
+				{{1, -1, 1}, 0xFFFFFFFF, {1, 1}},
+				{{-1, 1, 1}, 0xFFFFFFFF, {0, 0}},
+				{{1, -1, 1}, 0xFFFFFFFF, {1, 1}},
+				{{1, 1, 1}, 0xFFFFFFFF, {1, 0}},
+
+				// Bottom
+				{{-1, -1, -1}, 0xFFFFFFFF, {0, 0}},
+				{{-1, 1, -1}, 0xFFFFFFFF, {0, 1}},
+				{{1, 1, -1}, 0xFFFFFFFF, {1, 1}},
+				{{-1, -1, -1}, 0xFFFFFFFF, {0, 0}},
+				{{1, 1, -1}, 0xFFFFFFFF, {1, 1}},
+				{{1, -1, -1}, 0xFFFFFFFF, {1, 0}},
+
+				// Front
+				{{-1, -1, 1}, 0xFFFFFFFF, {0, 0}},
+				{{-1, -1, -1}, 0xFFFFFFFF, {0, 1}},
+				{{1, -1, -1}, 0xFFFFFFFF, {1, 1}},
+				{{-1, -1, 1}, 0xFFFFFFFF, {0, 0}},
+				{{1, -1, -1}, 0xFFFFFFFF, {1, 1}},
+				{{1, -1, 1}, 0xFFFFFFFF, {1, 0}},
+
+				// Back
+				{{1, 1, 1}, 0xFFFFFFFF, {0, 0}},
+				{{1, 1, -1}, 0xFFFFFFFF, {0, 1}},
+				{{-1, 1, -1}, 0xFFFFFFFF, {1, 1}},
+				{{1, 1, 1}, 0xFFFFFFFF, {0, 0}},
+				{{-1, 1, -1}, 0xFFFFFFFF, {1, 1}},
+				{{-1, 1, 1}, 0xFFFFFFFF, {1, 0}},
+
+				// Right
+				{{1, -1, 1}, 0xFFFFFFFF, {0, 0}},
+				{{1, -1, -1}, 0xFFFFFFFF, {0, 1}},
+				{{1, 1, -1}, 0xFFFFFFFF, {1, 1}},
+				{{1, -1, 1}, 0xFFFFFFFF, {0, 0}},
+				{{1, 1, -1}, 0xFFFFFFFF, {1, 1}},
+				{{1, 1, 1}, 0xFFFFFFFF, {1, 0}},
+
+				// Left
+				{{-1, 1, 1}, 0xFFFFFFFF, {0, 0}},
+				{{-1, 1, -1}, 0xFFFFFFFF, {0, 1}},
+				{{-1, -1, -1}, 0xFFFFFFFF, {1, 1}},
+				{{-1, 1, 1}, 0xFFFFFFFF, {0, 0}},
+				{{-1, -1, -1}, 0xFFFFFFFF, {1, 1}},
+				{{-1, -1, 1}, 0xFFFFFFFF, {1, 0}}
+			};
+			//plat_set_3d_view({-3.0f, -3.0f, 3.0f}, {1.0f, 1.0f, -1.0f}, {0.0f, 0.0f, 1.0f}, 90.0f * 3.1415f / 180.0f);
+			plat_set_3d_view({0, 0, 0}, {0, 1, 0}, {0, 0, 1}, 90.0f * 3.1415f / 180.0f);
+			plat_draw_3d(0, cube_verts, 36);
+			// > TEMP CUBE
+
+			device->SetTransform(D3DTS_VIEW, &crispy_view_matrix);
+			device->SetTransform(D3DTS_PROJECTION, &crispy_proj_matrix);
+			device->SetFVF(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1);
+			device->SetRenderState(D3DRENDERSTATETYPE::D3DRS_ZENABLE, 0);
+			device->SetRenderState(D3DRENDERSTATETYPE::D3DRS_CULLMODE, D3DCULL::D3DCULL_NONE);
+			for (const auto& draw_cmd : crispy_draw_list)
+			{
+				device->SetTexture(0, draw_cmd.texture);
+				device->DrawPrimitiveUP(D3DPRIMITIVETYPE::D3DPT_TRIANGLELIST, count / 3, crispy_vertices.data() + draw_cmd.vertices_idx, sizeof(crispy_vertex_t));
+			}
+			crispy_draw_list.clear();
+			crispy_vertices.clear();
+			// > [crispy]
+
 			result = device->EndScene();
 			if (SUCCEEDED(result))
 				device->Present(nullptr, nullptr, 0, nullptr);
@@ -430,8 +514,8 @@ int plat_create_window()
 		int screenwidth = GetDeviceCaps(screendc, HORZRES);
 		int screenheight = GetDeviceCaps(screendc, VERTRES);
 		ReleaseDC(0, screendc);
-
-		Window = CreateWindowEx(WS_EX_APPWINDOW, TEXT("DescentWindow"), TEXT("Chocolate Descent"), WS_POPUP | WS_VISIBLE, 0, 0, screenwidth, screenheight, 0, 0, GetModuleHandle(nullptr), 0);
+		
+		Window = CreateWindowEx(WS_EX_APPWINDOW, TEXT("DescentWindow"), TEXT("Crispy Descent"), WS_POPUP | WS_VISIBLE, 0, 0, screenwidth, screenheight, 0, 0, GetModuleHandle(nullptr), 0);
 		if (Window == 0)
 			return 1;
 
@@ -744,17 +828,138 @@ void mouse_set_pos(int x, int y)
 
 // < [crispy] 3D rendering
 
+static uintptr_t temp_texture = 0;
+
 uintptr_t plat_create_texture(uint8_t* data, int width, int height)
 {
-	return 0;
+	if (!device) return 0;
+	if (!data || width <= 0 || height <= 0) return 0;
+
+	IDirect3DTexture9* texture = nullptr;
+	device->CreateTexture((UINT)width, (UINT)height, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture, 0);
+	if (!texture)
+	{
+		printf("Failed to create texture of size %ix%i\n", width, height);
+		return 0;
+	}
+
+	D3DLOCKED_RECT rect;
+	texture->LockRect( 0, &rect, 0, D3DLOCK_DISCARD );
+	uint8_t* dest = (uint8_t*)rect.pBits;
+	memcpy(dest, data, sizeof(uint8_t) * width * height * 4);
+	texture->UnlockRect(0);
+
+	return reinterpret_cast<uintptr_t>(texture);
 }
 
-void plat_set_3d_view(vec3f_t eye, vec3f_t forward, vec3f_t up, float fov_rad, float ratio)
+static void normalize_vec3(vec3f_t& v)
 {
+    auto len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    if (len > 0.0f)
+    {
+        len = 1.0f / len;
+    }
+    v.x *= len;
+    v.y *= len;
+    v.z *= len;
+}
+
+static vec3f_t cross(const vec3f_t& a, const vec3f_t& b)
+{
+	vec3f_t result;
+    result.x = a.y * b.z - a.z * b.y;
+    result.y = a.z * b.x - a.x * b.z;
+    result.z = a.x * b.y - a.y * b.x;
+	return result;
+}
+
+static float dot(const vec3f_t& a, const vec3f_t& b)
+{
+	return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+void plat_set_3d_view(vec3f_t eye, vec3f_t forward, vec3f_t up, float fov_rad, float near_plane, float far_plane)
+{
+	// View
+	{
+		auto R2 = forward;
+		normalize_vec3(R2);
+
+		auto R0 = cross(up, R2);
+		normalize_vec3(R0);
+
+		auto R1 = cross(R2, R0);
+
+		vec3f_t NegEyePosition = {-eye.x, -eye.y, -eye.z};
+
+		auto D0 = dot(R0, NegEyePosition);
+		auto D1 = dot(R1, NegEyePosition);
+		auto D2 = dot(R2, NegEyePosition);
+
+		crispy_view_matrix = {
+			R0.x, R1.x, R2.x, 0,
+			R0.y, R1.y, R2.y, 0,
+			R0.z, R1.z, R2.z, 0,
+			D0, D1, D2, 1};
+	}
+
+	// Proj
+	{
+        float CosFov = std::cos(0.5f * fov_rad);
+        float SinFov = std::sin(0.5f * fov_rad);
+
+		float ratio = (float)ClientWidth / (float)ClientHeight;
+        float Height = CosFov / SinFov;
+        float Width = Height / ratio;
+        float fRange = far_plane / (near_plane - far_plane);
+
+        crispy_proj_matrix.m[0][0] = Width;
+        crispy_proj_matrix.m[0][1] = 0.0f;
+        crispy_proj_matrix.m[0][2] = 0.0f;
+        crispy_proj_matrix.m[0][3] = 0.0f;
+
+        crispy_proj_matrix.m[1][0] = 0.0f;
+        crispy_proj_matrix.m[1][1] = Height;
+        crispy_proj_matrix.m[1][2] = 0.0f;
+        crispy_proj_matrix.m[1][3] = 0.0f;
+
+        crispy_proj_matrix.m[2][0] = 0.0f;
+        crispy_proj_matrix.m[2][1] = 0.0f;
+        crispy_proj_matrix.m[2][2] = fRange;
+        crispy_proj_matrix.m[2][3] = -1.0f;
+
+        crispy_proj_matrix.m[3][0] = 0.0f;
+        crispy_proj_matrix.m[3][1] = 0.0f;
+        crispy_proj_matrix.m[3][2] = fRange * near_plane;
+        crispy_proj_matrix.m[3][3] = 0.0f;
+	}
 }
 
 void plat_draw_3d(uintptr_t texture_id, crispy_vertex_t* vertices, int count)
 {
+	if (!temp_texture)
+	{
+		uint32_t checker[4] = {
+			0xFFFFFFFF, 0xFF888888,
+			0xFF888888, 0xFFFFFFFF
+		};
+		temp_texture = plat_create_texture((uint8_t*)&checker, 2, 2);
+	}
+	texture_id = temp_texture;
+
+	if (!device) return;
+	if (!texture_id) return;
+	if (count <= 0) return;
+	if (!vertices) return;
+
+	IDirect3DTexture9* texture = reinterpret_cast<IDirect3DTexture9*>(texture_id);
+	
+	crispy_draw_list.push_back({});
+	auto& draw_cmd = crispy_draw_list.back();
+	draw_cmd.texture = texture;
+	draw_cmd.count = count;
+	draw_cmd.vertices_idx = (int)crispy_vertices.size();
+	crispy_vertices.insert(crispy_vertices.end(), vertices, vertices + count);
 }
 
 // > [crispy] 
